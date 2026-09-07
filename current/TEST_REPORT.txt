@@ -1,0 +1,19 @@
+HIN DÉLICES — VIDEO UX QA REPORT
+
+Date: 2026-09-07
+
+PASS: 3 inline videos use muted + playsinline + loop + preload=none + posters
+PASS: video assets are present, H.264, and mobile-sized
+PASS: viewport IntersectionObserver autoplay/pause logic is present
+PASS: reduced-motion playback suppression is present
+PASS: lightbox image/video teardown and Escape handling are present
+PASS: video ARIA labels participate in FR/AR i18n
+PASS: protected 3-step form/validation/WhatsApp blocks are unchanged
+PASS: baseline HTML form markup is unchanged
+PASS: JavaScript syntax check
+PASS: existing JavaScript unit tests
+PASS: existing full QA regression suite
+
+ALL VIDEO UX REGRESSION TESTS PASSED
+
+Note: a real Chromium interaction run was not used as a final pass because the sandbox's Chromium administrator policy blocks local-page navigation. Static, JavaScript, media, and regression tests were executed successfully.

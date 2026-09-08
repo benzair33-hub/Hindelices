@@ -11,8 +11,6 @@
 <meta name="geo.position" content="31.6508;-8.0322">
 <meta name="theme-color" content="#FBF3E7">
 <link rel="canonical" href="https://benzair33-hub.github.io/Hindelices/">
-<link rel="alternate" hreflang="fr" href="https://benzair33-hub.github.io/Hindelices/">
-<link rel="alternate" hreflang="ar" href="https://benzair33-hub.github.io/Hindelices/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Hin Délices">
 <meta property="og:title" content="Hin Délices — Pâtisserie maison à Marrakech">
@@ -31,6 +29,7 @@
   "image":"https://benzair33-hub.github.io/Hindelices/current/images/hero-cookies.jpg",
   "telephone":"+212660530382",
   "address":{"@type":"PostalAddress","streetAddress":"Quick Targa","addressLocality":"Marrakech","addressRegion":"Marrakech-Safi","addressCountry":"MA"},
+  "geo":{"@type":"GeoCoordinates","latitude":31.6508,"longitude":-8.0322},
   "areaServed":["Targa","Guéliz","Hivernage","Semlalia","Palmeraie","Victor Hugo","Agdal"],
   "knowsLanguage":["fr","ar"],
   "hasMenu":{"@type":"Menu","name":"Nos Créations","hasMenuItem":[
@@ -42,10 +41,15 @@
   "sameAs":["https://www.instagram.com/hin_delices"]
 }
 </script>
-<style>html,body{margin:0;min-height:100%;background:#fff}#site-loading{min-height:100vh;display:grid;place-items:center;font:600 18px system-ui,-apple-system,sans-serif;color:#3b2a24}</style>
+<style>html,body{margin:0;min-height:100%;background:#fff}#site-loading{min-height:100vh;display:grid;place-items:center;padding:2rem;box-sizing:border-box;font:600 18px system-ui,-apple-system,sans-serif;color:#3b2a24;text-align:center}#site-loading a{color:inherit}</style>
 </head>
 <body>
-<main id="site-loading" aria-live="polite">Chargement de Hin Délices…</main>
+<main id="site-loading" aria-live="polite">
+  <div>
+    <div>Chargement de Hin Délices…</div>
+    <noscript><p>JavaScript est désactivé. <a href="https://api.whatsapp.com/send?phone=212660530382&amp;text=Salam%20Hind%20!%20Je%20souhaite%20passer%20une%20commande%20via%20Hin%20D%C3%A9lices.">Contacter Hind sur WhatsApp</a></p></noscript>
+  </div>
+</main>
 <script>
 (function(){
   'use strict';
@@ -57,11 +61,10 @@
     html = html.replace('<head>', '<head>\n<base href="./current/">');
     html = html.replace('</head>', '<script type="application/ld+json">' + JSON.stringify({
       '@context':'https://schema.org','@type':'WebSite','name':'Hin Délices','url':'https://benzair33-hub.github.io/Hindelices/'
-    }) + '<\/script></head>');
-    html = html.replace(/href="https:\/\/wa\.me\/212660530382"/g, 'href="https://api.whatsapp.com/send?phone=212660530382"');
-    html = html.replace(/href="https:\/\/wa\.me\/212660530382" target="_blank" rel="noopener noreferrer"/g, 'href="https://api.whatsapp.com/send?phone=212660530382"');
+    }) + '<\\/script></head>');
+    html = html.replace(/href="https:\/\/wa\.me\/212660530382"(?:\s+target="_blank")?(?:\s+rel="noopener noreferrer")?/g, 'href="https://api.whatsapp.com/send?phone=212660530382"');
     html = html.replace('<form id="orderForm" novalidate>', '<form id="orderForm" action="https://api.whatsapp.com/send" method="GET" target="_self" novalidate><input type="hidden" name="phone" value="212660530382"><input type="hidden" name="text" value="Salam Hind ! Je souhaiterais passer une commande via Hin Délices.">');
-    html = html.replace('</body>', '<script src="../fixes.js"><\/script></body>');
+    html = html.replace('</body>', '<script src="../fixes.js?v=20260908"><\\/script></body>');
     document.open();
     document.write(html);
     document.close();

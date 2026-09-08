@@ -1,4 +1,4 @@
-/* Hin Délices — GitHub Pages + local-market enhancement layer */
+/* Hin Délices — robust GitHub Pages / mobile conversion hardening */
 (function () {
   'use strict';
 
@@ -9,213 +9,268 @@
     return (document.documentElement.lang || 'fr').toLowerCase().indexOf('ar') === 0;
   }
 
-  function upsertMeta(name, content, attr) {
-    attr = attr || 'name';
-    var el = document.head && document.head.querySelector('meta[' + attr + '=\"' + name + '\"]');
-    if (!el) {
-      el = document.createElement('meta');
-      el.setAttribute(attr, name);
-      document.head.appendChild(el);
-    }
-    el.setAttribute('content', content);
+  function currentCategory(form) {
+    var input = form && form.querySelector('input[name="categorie"]:checked');
+    return input ? input.value : '';
   }
 
-  function addSeoSchema() {
-    if (!document.head || document.getElementById('hind-local-schema')) return;
-    var script = document.createElement('script');
-    script.type = 'application/ld+json';
-    script.id = 'hind-local-schema';
-    script.textContent = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Bakery',
-      '@id': ROOT_URL + '#bakery',
-      'name': 'Hin Délices',
-      'url': ROOT_URL,
-      'image': ROOT_URL + 'current/images/hero-cookies.jpg',
-      'telephone': '+212660530382',
-      'address': {
-        '@type': 'PostalAddress',
-        'streetAddress': 'Quick Targa',
-        'addressLocality': 'Marrakech',
-        'addressRegion': 'Marrakech-Safi',
-        'addressCountry': 'MA'
-      },
-      'areaServed': ['Targa', 'Guéliz', 'Hivernage', 'Semlalia', 'Palmeraie', 'Victor Hugo', 'Agdal'],
-      'knowsLanguage': ['fr', 'ar'],
-      'hasMenu': {
-        '@type': 'Menu',
-        'name': 'Nos Créations',
-        'hasMenuItem': [
-          { '@type': 'MenuItem', 'name': 'Sablés & Cookies Maison', 'offers': { '@type': 'Offer', 'price': '130', 'priceCurrency': 'MAD' } },
-          { '@type': 'MenuItem', 'name': 'Cake Design & Gâteaux', 'offers': { '@type': 'Offer', 'price': '350', 'priceCurrency': 'MAD' } },
-          { '@type': 'MenuItem', 'name': 'Plateau Assorti Prestige', 'offers': { '@type': 'Offer', 'price': '240', 'priceCurrency': 'MAD' } },
-          { '@type': 'MenuItem', 'name': 'Coffret saisonnier', 'offers': { '@type': 'Offer', 'price': '180', 'priceCurrency': 'MAD' } }
-        ]
-      },
-      'sameAs': ['https://www.instagram.com/hin_delices']
-    });
-    document.head.appendChild(script);
-  }
-
-  function applySeo() {
-    upsertMeta('keywords', 'cake design marrakech, patisserie marrakech, gateau anniversaire marrakech, sables prestige marrakech, livraison gateau targa gueliz, حلويات مراكش, كيك ديزاين مراكش');
-    upsertMeta('MA-11', 'Marrakech-Safi', 'geo.region');
-    upsertMeta('Marrakech (Targa)', 'Marrakech (Targa)', 'geo.placename');
-    upsertMeta('31.6508;-8.0322', '31.6508;-8.0322', 'geo.position');
-    var canonical = document.head.querySelector('link[rel=\"canonical\"]');
-    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical); }
-    canonical.href = ROOT_URL;
-    addSeoSchema();
-  }
-
-  var labels = {
-    fr: {
-      cat1: 'Sablés & Cookies Maison',
-      cat2: 'Cake Design & Gâteaux',
-      cat3: 'Plateau Assorti Prestige',
-      cat4: 'Coffrets saisonniers',
-      pickup: 'Retrait à Quick Targa',
-      submit: 'Continuer sur WhatsApp',
-      greeting: 'Salam Hind ! Je souhaiterais passer une commande via Hin Délices.'
-    },
-    ar: {
-      cat1: 'صابلي وكوكيز الدار',
-      cat2: 'كيك ديزاين وطورطات المناسبات',
-      cat3: 'بلاطو مشكل للهدايا',
-      cat4: 'علب موسمية',
-      pickup: 'الاستلام من تاركة (Quick Targa)',
-      submit: 'دوز الطلب ف الواتساب ↗',
-      greeting: 'السلام عليكم هند، بغيت ندوز كوماند من Hin Délices.'
-    }
-  };
-
-  function text(selector, value) {
-    var el = document.querySelector(selector);
-    if (el) el.textContent = value;
-  }
-
-  function applyLocalizedLabels() {
-    var L = labels[isAR() ? 'ar' : 'fr'];
-    text('#cat-biscuits h3', L.cat1);
-    text('#cat-gateaux h3', L.cat2);
-    text('#cat-plateaux h3', L.cat3);
-    text('#cat-coffrets h3', L.cat4);
-    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n="fulfillmentPickup"], .pickup-label'), function (el) { el.textContent = L.pickup; });
-    var submit = document.querySelector('#orderForm button[type="submit"]');
-    if (submit) submit.textContent = L.submit;
-  }
-
-  function minDate(category) {
+  function minimumDate(category) {
     var d = new Date();
     d.setHours(d.getHours() + (category === 'Gâteaux sur mesure' ? 48 : 24));
-    return d.toISOString().slice(0, 10);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function enforceDateSafeguard(form) {
-    if (!form) return;
+  function applyDateGuard(form) {
     var date = document.getElementById('dateSouhaitee');
-    var hint = document.getElementById('dateHint');
     if (!date) return;
     function refresh() {
-      var checked = form.querySelector('input[name="categorie"]:checked');
-      var cat = checked ? checked.value : '';
-      date.min = minDate(cat);
-      date.setAttribute('min', date.min);
+      var min = minimumDate(currentCategory(form));
+      date.min = min;
+      date.setAttribute('min', min);
       date.style.minHeight = '48px';
       date.style.colorScheme = 'light';
-      if (hint) hint.textContent = cat === 'Gâteaux sur mesure'
+      if (date.value && date.value < min) date.value = '';
+      var hint = document.getElementById('dateHint');
+      if (hint) hint.textContent = currentCategory(form) === 'Gâteaux sur mesure'
         ? (isAR() ? 'كيك حسب الطلب: خاص على الأقل 48 ساعة.' : 'Gâteaux sur mesure : préavis de 48h minimum.')
         : (isAR() ? 'التحضير العادي: خاص على الأقل 24 ساعة.' : 'Préparation standard : préavis de 24h minimum.');
     }
     refresh();
-    Array.prototype.forEach.call(form.querySelectorAll('input[name="categorie"]'), function (el) { el.addEventListener('change', refresh); });
+    form.querySelectorAll('input[name="categorie"]').forEach(function (r) { r.addEventListener('change', refresh); });
   }
 
-  function fallbackForm(form) {
-    if (!form) return;
-    form.setAttribute('action', 'https://api.whatsapp.com/send');
-    form.setAttribute('method', 'GET');
-    form.setAttribute('target', '_self');
-    var phone = form.querySelector('input[name="phone"]');
-    if (!phone) {
-      phone = document.createElement('input'); phone.type = 'hidden'; phone.name = 'phone'; form.appendChild(phone);
-    }
-    phone.value = WHATSAPP;
-    var greeting = form.querySelector('input[name="text"]');
-    if (!greeting) {
-      greeting = document.createElement('input'); greeting.type = 'hidden'; greeting.name = 'text'; form.appendChild(greeting);
-    }
-    greeting.value = labels[isAR() ? 'ar' : 'fr'].greeting;
+  var quantityMap = {
+    'Biscuits du quotidien': [
+      ['36 pièces', '36 biscuits sablés'], ['72 pièces', '72 biscuits sablés'], ['Sur mesure', 'Sur mesure']
+    ],
+    'Gâteaux sur mesure': [
+      ['6–8 pers.', '6–8 personnes'], ['10–12 pers.', '10–12 personnes'], ['Sur mesure', 'Sur mesure']
+    ],
+    'Plateaux cadeaux': [
+      ['1 plateau', '1 plateau'], ['2 plateaux', '2 plateaux'], ['Sur mesure', 'Sur mesure']
+    ],
+    'Coffrets saisonniers': [
+      ['1 coffret', '1 coffret'], ['2 coffrets', '2 coffrets'], ['Sur mesure', 'Sur mesure']
+    ],
+    'À discuter': [
+      ['À définir ensemble', 'À définir ensemble']
+    ]
+  };
+
+  function renderQuantity(form) {
+    var wrap = document.getElementById('quantityChips');
+    var qty = document.getElementById('quantite');
+    if (!wrap || !qty) return;
+
+    var category = currentCategory(form);
+    var items = quantityMap[category] || [];
+    wrap.innerHTML = '';
+    qty.value = '';
+    qty.removeAttribute('aria-invalid');
+    qty.removeAttribute('inputmode');
+
+    items.forEach(function (item) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'quantity-chip';
+      chip.textContent = isAR() ? ({'36 pièces':'36 قطعة','72 pièces':'72 قطعة','Sur mesure':'مخصص','6–8 pers.':'6–8 أشخاص','10–12 pers.':'10–12 شخصًا','1 plateau':'صينية واحدة','2 plateaux':'صينيتان','1 coffret':'علبة واحدة','2 coffrets':'علبتان','À définir ensemble':'نحددها معًا'}[item[0]] || item[0]) : item[0];
+      chip.setAttribute('data-quantity', item[1]);
+      chip.setAttribute('aria-pressed', 'false');
+      chip.addEventListener('click', function () {
+        qty.value = item[1];
+        wrap.querySelectorAll('.quantity-chip').forEach(function (c) {
+          c.classList.remove('active', 'is-selected');
+          c.setAttribute('aria-pressed', 'false');
+        });
+        chip.classList.add('active', 'is-selected');
+        chip.setAttribute('aria-pressed', 'true');
+        qty.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      wrap.appendChild(chip);
+    });
   }
 
-  function patchWhatsappLinks() {
-    Array.prototype.forEach.call(document.querySelectorAll('a[href*="wa.me/' + WHATSAPP + '"]'), function (a) {
-      a.href = 'https://api.whatsapp.com/send?phone=' + WHATSAPP;
+  function applyQuantityGuard(form) {
+    form.querySelectorAll('input[name="categorie"]').forEach(function (radio) {
+      radio.addEventListener('change', function () { renderQuantity(form); });
+    });
+    renderQuantity(form);
+  }
+
+  function applyDeliveryGuard(form) {
+    var zone = document.getElementById('quartier');
+    var extra = document.getElementById('deliveryExtra');
+    if (!zone) return;
+
+    function refresh() {
+      var mode = form.querySelector('input[name="mode"]:checked');
+      var delivery = !!mode && mode.value === 'Livraison';
+      if (delivery) {
+        zone.setAttribute('required', 'required');
+      } else {
+        zone.removeAttribute('required');
+        zone.value = '';
+      }
+      if (extra) {
+        extra.classList.toggle('is-active', delivery);
+        extra.setAttribute('aria-hidden', String(!delivery));
+      }
+      var grid = document.getElementById('zoneChipGrid');
+      if (grid) grid.querySelectorAll('.zone-chip').forEach(function (chip) {
+        chip.setAttribute('aria-pressed', String(delivery && zone.value === chip.getAttribute('data-value')));
+      });
+    }
+
+    form.querySelectorAll('input[name="mode"]').forEach(function (r) { r.addEventListener('change', refresh); });
+    zone.addEventListener('change', refresh);
+    refresh();
+  }
+
+  function addZoneChips(form) {
+    var select = document.getElementById('quartier');
+    if (!select || document.getElementById('zoneChipGrid')) return;
+
+    var grid = document.createElement('div');
+    grid.id = 'zoneChipGrid';
+    grid.className = 'zone-chip-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', isAR() ? 'الحي / المنطقة' : 'Quartier / zone');
+
+    Array.from(select.options).forEach(function (option) {
+      if (!option.value) return;
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'zone-chip';
+      chip.textContent = option.textContent;
+      chip.setAttribute('data-value', option.value);
+      chip.setAttribute('aria-pressed', 'false');
+      chip.addEventListener('click', function () {
+        select.value = option.value;
+        grid.querySelectorAll('.zone-chip').forEach(function (x) { x.setAttribute('aria-pressed', String(x === chip)); });
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      grid.appendChild(chip);
+    });
+
+    select.parentNode.insertBefore(grid, select.nextSibling);
+    select.setAttribute('aria-hidden', 'true');
+    select.style.position = 'absolute';
+    select.style.inlineSize = '1px';
+    select.style.blockSize = '1px';
+    select.style.opacity = '0';
+    select.style.pointerEvents = 'none';
+
+    var style = document.createElement('style');
+    style.textContent = '.zone-chip-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem;margin-top:.65rem}.zone-chip{min-height:48px;padding:.65rem .75rem;border:1px solid var(--line);border-radius:999px;background:var(--white);color:var(--cocoa);font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}.zone-chip[aria-pressed="true"]{background:var(--caramel);border-color:var(--caramel);color:var(--white);box-shadow:0 0 0 2px var(--honey)}.zone-chip:focus-visible{outline:3px solid var(--honey);outline-offset:2px}@media(max-width:760px){.zone-chip-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}';
+    document.head.appendChild(style);
+  }
+
+  function whatsappMessage(form) {
+    var fd = new FormData(form);
+    var data = {
+      category: String(fd.get('categorie') || ''),
+      date: String(fd.get('date') || ''),
+      quantity: String(fd.get('quantite') || ''),
+      occasion: String(fd.get('occasion') || ''),
+      details: String(fd.get('details') || ''),
+      mode: String(fd.get('mode') || 'Retrait'),
+      zone: String(fd.get('quartier') || ''),
+      name: String(fd.get('nom') || ''),
+      phone: String(fd.get('telephone') || '')
+    };
+
+    if (isAR()) return [
+      'السلام عليكم هند، بغيت ندوز كوماند من Hin Délices.',
+      'الفئة: ' + data.category,
+      'التاريخ: ' + data.date,
+      'الكمية: ' + data.quantity,
+      'المناسبة: ' + (data.occasion || 'غير محددة'),
+      'التفاصيل: ' + (data.details || 'لا توجد'),
+      'طريقة الاستلام: ' + data.mode,
+      'الحي / المنطقة: ' + (data.zone || 'غير محدد'),
+      'الاسم: ' + data.name,
+      'الهاتف: ' + data.phone
+    ].join('\n');
+
+    return [
+      'Salam Hind ! Je souhaiterais passer une commande via Hin Délices.',
+      '• Produit : ' + data.category,
+      '• Date : ' + data.date,
+      '• Quantité : ' + data.quantity,
+      '• Occasion : ' + (data.occasion || 'Non précisée'),
+      '• Détails : ' + (data.details || 'Aucun'),
+      '• Mode : ' + data.mode + (data.zone ? ' (Zone : ' + data.zone + ')' : ''),
+      '• Client : ' + data.name + ' — ' + data.phone
+    ].join('\n');
+  }
+
+  function validPhone(value) {
+    var normalized = String(value || '').replace(/[\s().-]/g, '').replace(/^00/, '+');
+    return /^(?:\+212|0)[5-7]\d{8}$/.test(normalized);
+  }
+
+  function showError(form, message, field) {
+    var error = document.getElementById('err1');
+    if (error) {
+      error.textContent = message;
+      error.hidden = false;
+      error.setAttribute('tabindex', '-1');
+      try { error.focus({ preventScroll: true }); } catch (e) { error.focus(); }
+    }
+    if (field && typeof field.focus === 'function') {
+      try { field.focus({ preventScroll: true }); } catch (e) { field.focus(); }
+    }
+  }
+
+  function validate(form) {
+    var category = currentCategory(form);
+    var qty = document.getElementById('quantite');
+    var date = document.getElementById('dateSouhaitee');
+    var mode = form.querySelector('input[name="mode"]:checked');
+    var zone = document.getElementById('quartier');
+    var name = document.getElementById('nom');
+    var phone = document.getElementById('telephone');
+    var min = date ? date.min : minimumDate(category);
+
+    if (!category || !qty || !qty.value.trim()) { showError(form, isAR() ? 'يرجى اختيار الفئة والكمية.' : 'Merci de choisir une catégorie et une quantité.', qty); return false; }
+    if (!date || !date.value || date.value < min) { showError(form, isAR() ? 'يرجى اختيار تاريخ يحترم المهلة المحددة.' : 'Merci de choisir une date respectant le délai indiqué.', date); return false; }
+    if (!mode) { showError(form, isAR() ? 'يرجى اختيار طريقة الاستلام.' : 'Merci de choisir un mode de réception.', null); return false; }
+    if (mode.value === 'Livraison' && (!zone || !zone.value)) { showError(form, isAR() ? 'يرجى اختيار منطقتكم للتوصيل.' : 'Merci de choisir votre zone de livraison.', document.getElementById('zoneChipGrid') || zone); return false; }
+    if (!name || !name.value.trim()) { showError(form, isAR() ? 'يرجى إدخال اسمكم.' : 'Merci d’indiquer votre nom.', name); return false; }
+    if (!phone || !validPhone(phone.value)) { showError(form, isAR() ? 'يرجى إدخال رقم هاتف مغربي صالح.' : 'Merci d’indiquer un numéro de téléphone marocain valide.', phone); return false; }
+    return true;
+  }
+
+  function applyWhatsappLinks() {
+    document.querySelectorAll('a[href*="wa.me/"], a[href*="api.whatsapp.com/send"]').forEach(function (a) {
+      var message = isAR() ? 'السلام عليكم هند، بغيت نتواصل معاكم من Hin Délices.' : 'Salam Hind ! Je souhaite passer une commande via Hin Délices.';
+      a.href = 'https://api.whatsapp.com/send?phone=' + WHATSAPP + '&text=' + encodeURIComponent(message);
       a.removeAttribute('target');
       a.removeAttribute('rel');
     });
   }
 
-  function patchQuantityReset(form) {
-    if (!form) return;
-    var qty = document.getElementById('quantite');
-    var chips = document.getElementById('quantityChips');
-    if (!qty || !chips) return;
-    Array.prototype.forEach.call(form.querySelectorAll('input[name="categorie"]'), function (input) {
-      input.addEventListener('change', function () {
-        qty.value = '';
-        Array.prototype.forEach.call(chips.querySelectorAll('.quantity-chip'), function (chip) {
-          chip.classList.remove('is-selected');
-          chip.setAttribute('aria-pressed', 'false');
-        });
-      });
-    });
-  }
-
-  function ensureZoneChips(form) {
-    var select = document.getElementById('quartier');
-    if (!form || !select || document.getElementById('zoneChipGrid')) return;
-    var zones = Array.prototype.map.call(select.options, function (o) { return { value: o.value, label: o.textContent }; }).filter(function (z) { return z.value; });
-    var grid = document.createElement('div');
-    grid.id = 'zoneChipGrid'; grid.className = 'zone-chip-grid'; grid.setAttribute('role', 'group');
-    grid.setAttribute('aria-label', isAR() ? 'الحي / المنطقة' : 'Quartier / zone');
-    zones.forEach(function (zone) {
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'zone-chip'; b.textContent = zone.label; b.setAttribute('aria-pressed', 'false');
-      b.addEventListener('click', function () {
-        select.value = zone.value;
-        Array.prototype.forEach.call(grid.children, function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-      grid.appendChild(b);
-    });
-    select.parentNode.insertBefore(grid, select.nextSibling);
-    select.setAttribute('aria-hidden', 'true');
-    select.style.position = 'absolute'; select.style.inlineSize = '1px'; select.style.blockSize = '1px'; select.style.opacity = '0'; select.style.pointerEvents = 'none';
-    var s = document.createElement('style');
-    s.textContent = '.zone-chip-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem;margin-top:.65rem}.zone-chip{min-height:48px;padding:.65rem .75rem;border:1px solid var(--line);border-radius:999px;background:var(--white);color:var(--cocoa);font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}.zone-chip[aria-pressed="true"]{background:var(--caramel);border-color:var(--caramel);color:var(--white)}@media(max-width:760px){.zone-chip-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}';
-    document.head.appendChild(s);
-  }
-
-  function init() {
-    applySeo();
+  function setup() {
     var form = document.getElementById('orderForm');
-    if (form) {
-      fallbackForm(form);
-      enforceDateSafeguard(form);
-      patchQuantityReset(form);
-      ensureZoneChips(form);
-      var formText = form.querySelector('input[name="text"]');
-      form.addEventListener('input', function () {
-        if (formText) formText.value = labels[isAR() ? 'ar' : 'fr'].greeting;
-      });
-    }
-    patchWhatsappLinks();
-    applyLocalizedLabels();
-    var fr = document.getElementById('langFr');
-    var ar = document.getElementById('langAr');
-    if (fr) fr.addEventListener('click', function () { setTimeout(applyLocalizedLabels, 50); });
-    if (ar) ar.addEventListener('click', function () { setTimeout(applyLocalizedLabels, 50); });
+    if (!form) { applyWhatsappLinks(); return; }
+
+    var qty = document.getElementById('quantite');
+    if (qty) qty.removeAttribute('inputmode');
+
+    applyDateGuard(form);
+    applyQuantityGuard(form);
+    addZoneChips(form);
+    applyDeliveryGuard(form);
+    applyWhatsappLinks();
+
+    /* Capture phase: this is the definitive submission path even if an older listener is attached. */
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!validate(form)) return;
+      window.location.href = 'https://api.whatsapp.com/send?phone=' + WHATSAPP + '&text=' + encodeURIComponent(whatsappMessage(form));
+    }, true);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
 })();

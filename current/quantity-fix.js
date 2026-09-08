@@ -1,328 +1,169 @@
-/* Hin Délices — production order UX + mobile hardening
-   Single source of truth for category/quantity compatibility, resilient
-   rendering for Safari/iOS, delivery cleanup, bilingual quantity labels,
-   and graceful recovery for missing optional portrait assets.
-*/
+/* Hin Délices — category-aware order state + mobile hardening */
 (function () {
   "use strict";
-
   var CONFIG = {
     "Biscuits du quotidien": {
-      price: 130,
       quantities: [
-        { fr: "36 pièces", ar: "36 قطعة", value: "36 biscuits sablés" },
-        { fr: "72 pièces", ar: "72 قطعة", value: "72 biscuits sablés" },
-        { fr: "Sur mesure", ar: "حسب الطلب", value: "", custom: true }
+        { fr:"36 pièces", ar:"36 قطعة", value:"36 pièces" },
+        { fr:"72 pièces", ar:"72 قطعة", value:"72 pièces" },
+        { fr:"Sur mesure", ar:"حسب الطلب", value:"", custom:true }
       ]
     },
     "Gâteaux sur mesure": {
-      price: 350,
       quantities: [
-        { fr: "6–8 pers.", ar: "6–8 أشخاص", value: "6–8 personnes" },
-        { fr: "10–12 pers.", ar: "10–12 شخصًا", value: "10–12 personnes" },
-        { fr: "Sur mesure", ar: "حسب الطلب", value: "", custom: true }
+        { fr:"6–8 pers.", ar:"6–8 أشخاص", value:"6–8 pers." },
+        { fr:"10–12 pers.", ar:"10–12 شخصًا", value:"10–12 pers." },
+        { fr:"Sur mesure", ar:"حسب الطلب", value:"", custom:true }
       ]
     },
     "Plateaux cadeaux": {
-      price: 240,
       quantities: [
-        { fr: "1 plateau", ar: "صينية واحدة", value: "1 plateau" },
-        { fr: "2 plateaux", ar: "صينيتان", value: "2 plateaux" },
-        { fr: "Sur mesure", ar: "حسب الطلب", value: "", custom: true }
+        { fr:"1 plateau", ar:"صينية واحدة", value:"1 plateau" },
+        { fr:"2 plateaux", ar:"صينيتان", value:"2 plateaux" },
+        { fr:"Sur mesure", ar:"حسب الطلب", value:"", custom:true }
       ]
     },
     "Coffrets saisonniers": {
-      price: 180,
       quantities: [
-        { fr: "1 coffret", ar: "علبة واحدة", value: "1 coffret" },
-        { fr: "2 coffrets", ar: "علبتان", value: "2 coffrets" },
-        { fr: "Sur mesure", ar: "حسب الطلب", value: "", custom: true }
+        { fr:"1 coffret", ar:"علبة واحدة", value:"1 coffret" },
+        { fr:"2 coffrets", ar:"علبتان", value:"2 coffrets" },
+        { fr:"Sur mesure", ar:"حسب الطلب", value:"", custom:true }
       ]
     },
-    "À discuter": {
-      price: null,
-      quantities: [
-        { fr: "Sur mesure", ar: "حسب الطلب", value: "", custom: true }
-      ]
-    }
+    "À discuter": { quantities:[{ fr:"Sur mesure", ar:"حسب الطلب", value:"", custom:true }] }
   };
-
-  var state = {
-    category: "",
-    quantity: "",
-    mode: "Retrait",
-    neighborhood: ""
-  };
-
-  function $(id) { return document.getElementById(id); }
-  function form() { return $("orderForm"); }
-  function lang() { return document.documentElement.lang === "ar" ? "ar" : "fr"; }
-  function checked(name) {
-    var f = form();
-    return f ? f.querySelector('input[name="' + name + '"]:checked') : null;
-  }
-  function category() {
-    var r = checked("categorie");
-    return r ? r.value : "";
-  }
-  function inputValue(id) {
-    var el = $(id);
-    return el ? String(el.value || "").trim() : "";
-  }
-  function dispatch(el, type) {
-    if (!el) return;
-    try { el.dispatchEvent(new Event(type, { bubbles: true })); } catch (e) {
-      var evt = document.createEvent("Event");
-      evt.initEvent(type, true, true);
-      el.dispatchEvent(evt);
-    }
-  }
-  function updateStateFromDom() {
-    state.category = category();
-    state.quantity = inputValue("quantite");
-    var mode = checked("mode");
-    state.mode = mode ? mode.value : "Retrait";
-    var zone = $("quartier");
-    state.neighborhood = zone ? String(zone.value || "").trim() : "";
+  var state = { category:"", quantity:"", mode:"Retrait", neighborhood:"" };
+  function $(id){ return document.getElementById(id); }
+  function getForm(){ return $("orderForm"); }
+  function getLang(){ return document.documentElement.lang === "ar" ? "ar" : "fr"; }
+  function checked(name){ var f=getForm(); return f ? f.querySelector('input[name="'+name+'"]:checked') : null; }
+  function getCategory(){ var r=checked("categorie"); return r ? r.value : ""; }
+  function emit(el,type){ if(!el)return; try{el.dispatchEvent(new Event(type,{bubbles:true}));}catch(e){var x=document.createEvent("Event");x.initEvent(type,true,true);el.dispatchEvent(x);} }
+  function syncState(){
+    state.category=getCategory();
+    var q=$("quantite"), m=checked("mode"), z=$("quartier");
+    state.quantity=q ? String(q.value||"").trim() : "";
+    state.mode=m ? m.value : "Retrait";
+    state.neighborhood=z ? String(z.value||"").trim() : "";
     return state;
   }
-  function setQuantity(value, userAction) {
-    var input = $("quantite");
-    if (!input) return;
-    input.value = value || "";
-    state.quantity = input.value;
-    dispatch(input, "input");
-    dispatch(input, "change");
-    if (userAction) updateSummaryIfAvailable();
-  }
-  function currentPreset(list, value) {
-    return list.find(function (item) { return !item.custom && item.value === value; }) || null;
-  }
-  function placeholderFor(cat) {
-    if (cat === "À discuter") return lang() === "ar" ? "صفوا الكمية أو الحجم المرغوب" : "Décrivez la quantité ou le format souhaité";
-    if (cat === "Gâteaux sur mesure") return lang() === "ar" ? "مثال: لـ 10 أشخاص أو كعكة من طابقين" : "Ex. pour 10 personnes, ou gâteau à 2 étages";
-    if (cat === "Biscuits du quotidien") return lang() === "ar" ? "مثال: 36 أو 72 قطعة، أو كمية مخصصة" : "Ex. 36 ou 72 biscuits, ou quantité personnalisée";
-    if (cat === "Plateaux cadeaux") return lang() === "ar" ? "مثال: صينية واحدة أو صينية مخصصة" : "Ex. 1 plateau, 2 plateaux, ou format personnalisé";
-    if (cat === "Coffrets saisonniers") return lang() === "ar" ? "مثال: علبة واحدة أو علبتان" : "Ex. 1 coffret, 2 coffrets, ou format personnalisé";
-    return lang() === "ar" ? "حددوا الكمية أو الحجم" : "Indiquez la quantité ou le format";
-  }
-  function setCustomInputMode(isCustom) {
-    var input = $("quantite");
-    if (!input) return;
-    input.placeholder = placeholderFor(category());
-    input.setAttribute("inputmode", isCustom ? "text" : "text");
-    input.setAttribute("autocomplete", "off");
-  }
-  function render() {
-    var wrap = $("quantityChips");
-    var input = $("quantite");
-    if (!wrap || !input) return;
-
-    updateStateFromDom();
-    var cat = state.category;
-    var cfg = CONFIG[cat];
-    wrap.innerHTML = "";
-
-    if (!cfg) {
-      setQuantity("");
-      setCustomInputMode(true);
-      return;
+  function placeholder(cat){
+    if(getLang()==="ar"){
+      if(cat==="Gâteaux sur mesure")return "مثال: لـ 10 أشخاص أو كعكة من طابقين";
+      if(cat==="Biscuits du quotidien")return "مثال: 36 أو 72 قطعة، أو كمية مخصصة";
+      if(cat==="Plateaux cadeaux")return "مثال: صينية واحدة أو صينية مخصصة";
+      if(cat==="Coffrets saisonniers")return "مثال: علبة واحدة أو علبتان";
+      return "صفوا الكمية أو الحجم المرغوب";
     }
-
-    var list = cfg.quantities;
-    var current = state.quantity;
-    var preset = currentPreset(list, current);
-    var customActive = !!current && !preset;
-
-    list.forEach(function (item) {
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "quantity-chip";
-      button.setAttribute("data-quantity", item.value);
-      button.setAttribute("aria-pressed", item.custom ? (customActive ? "true" : "false") : (item.value === current ? "true" : "false"));
-      button.setAttribute("aria-label", item.custom
-        ? (lang() === "ar" ? "كمية مخصصة" : "Quantité personnalisée")
-        : item[lang()]);
-      button.textContent = item[lang()];
-      if ((!item.custom && item.value === current) || (item.custom && customActive)) {
-        button.classList.add("is-selected");
-      }
-
-      button.addEventListener("click", function () {
-        var chips = wrap.querySelectorAll(".quantity-chip");
-        Array.prototype.forEach.call(chips, function (chip) {
-          chip.classList.remove("is-selected");
-          chip.setAttribute("aria-pressed", "false");
-        });
-        button.classList.add("is-selected");
-        button.setAttribute("aria-pressed", "true");
-        if (item.custom) {
-          setQuantity("");
-          setCustomInputMode(true);
-          try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
-        } else {
-          setQuantity(item.value, true);
-          setCustomInputMode(false);
-        }
-        updateStateFromDom();
+    if(cat==="Gâteaux sur mesure")return "Ex. pour 10 personnes, ou gâteau à 2 étages";
+    if(cat==="Biscuits du quotidien")return "Ex. 36 ou 72 biscuits, ou quantité personnalisée";
+    if(cat==="Plateaux cadeaux")return "Ex. 1 plateau, 2 plateaux, ou format personnalisé";
+    if(cat==="Coffrets saisonniers")return "Ex. 1 coffret, 2 coffrets, ou format personnalisé";
+    return "Décrivez la quantité ou le format souhaité";
+  }
+  function clearInvalidFields(){
+    var q=$("quantite"), z=$("quartier");
+    if(q) q.value="";
+    if(z && state.mode!=="Livraison") z.value="";
+  }
+  function renderQuantity(){
+    var wrap=$("quantityChips"), q=$("quantite");
+    if(!wrap||!q)return;
+    syncState();
+    var list=(CONFIG[state.category]||CONFIG["À discuter"]).quantities;
+    var current=state.quantity;
+    var isPreset=list.some(function(x){return !x.custom&&x.value===current;});
+    var isCustom=!!current&&!isPreset;
+    wrap.innerHTML="";
+    list.forEach(function(item){
+      var b=document.createElement("button");
+      b.type="button"; b.className="quantity-chip"; b.textContent=item[getLang()];
+      b.setAttribute("data-quantity",item.value);
+      var selected=item.custom?isCustom:(item.value===current);
+      b.classList.toggle("is-selected",selected); b.setAttribute("aria-pressed",selected?"true":"false");
+      b.setAttribute("aria-label",item[getLang()]);
+      b.addEventListener("click",function(){
+        Array.prototype.forEach.call(wrap.querySelectorAll(".quantity-chip"),function(x){x.classList.remove("is-selected");x.setAttribute("aria-pressed","false");});
+        b.classList.add("is-selected"); b.setAttribute("aria-pressed","true");
+        if(item.custom){q.value="";q.placeholder=placeholder(state.category);try{q.focus({preventScroll:true});}catch(e){q.focus();}}
+        else{q.value=item.value;q.placeholder=placeholder(state.category);}
+        syncState(); emit(q,"input"); emit(q,"change");
       });
-
-      wrap.appendChild(button);
+      wrap.appendChild(b);
     });
-
-    if (!preset && current && !customActive) setQuantity("");
-    setCustomInputMode(customActive || !!(list.find(function (item) { return item.custom; }) && !current));
+    q.placeholder=placeholder(state.category);
   }
-  function clearQuantity() {
-    var input = $("quantite");
-    if (!input) return;
-    input.value = "";
-    state.quantity = "";
-    dispatch(input, "input");
-    dispatch(input, "change");
+  function syncCategory(){
+    state.category=getCategory();
+    var q=$("quantite"); if(q)q.value="";
+    renderQuantity();
+    var date=$("dateSouhaitee"); if(date)emit(date,"change");
   }
-  function updateSummaryIfAvailable() {
-    updateStateFromDom();
-    if (window.HinDelices && typeof window.HinDelices.readValues === "function") {
-      try { window.HinDelices.readValues(); } catch (e) {}
+  function syncDelivery(){
+    var f=getForm(); if(!f)return;
+    var mode=checked("mode"), delivery=!!mode&&mode.value==="Livraison", zone=$("quartier"), extra=$("deliveryExtra");
+    if(extra){extra.classList.toggle("show",delivery);extra.classList.toggle("is-active",delivery);extra.setAttribute("aria-hidden",delivery?"false":"true");}
+    if(zone){zone.required=delivery;zone.disabled=false;if(!delivery)zone.value="";}
+    syncState(); emit(zone,"change");
+  }
+  function fixPortrait(){
+    var picture=document.querySelector(".hind-image picture"), img=picture&&picture.querySelector("img");
+    if(!img)return;
+    var src=img.getAttribute("src")||"";
+    if(src.indexOf("hind-portrait")!==-1){
+      Array.prototype.forEach.call(picture.querySelectorAll("source"),function(s){s.removeAttribute("srcset");});
+      img.src="images/hind-delices-logo.webp";
+      img.alt="Hin Délices — identité visuelle de la créatrice Hind";
+      img.classList.add("asset-fallback");
     }
   }
-  function syncCategory() {
-    state.category = category();
-    clearQuantity();
-    render();
-    var date = $("dateSouhaitee");
-    if (date) dispatch(date, "change");
-    updateSummaryIfAvailable();
+  function injectMobileAndCompatibilityCSS(){
+    if($("hind-production-fixes-style"))return;
+    var s=document.createElement("style");s.id="hind-production-fixes-style";s.textContent=[
+      "html{-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden}",
+      "body{overflow-x:hidden;-webkit-overflow-scrolling:touch}",
+      "button,a,input,select,textarea{touch-action:manipulation}",
+      "input,select,textarea{font-size:16px}",
+      ".quantity-chip,.cat-option,.radio-pill,.btn{min-height:48px}",
+      ".order-layout{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);gap:32px;align-items:start}",
+      ".order-intro{position:sticky;top:96px}",
+      ".category-options,.fulfillment-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}",
+      ".delivery-extra{margin-top:12px}",
+      ".delivery-extra.show,.delivery-extra.is-active{display:block}",
+      ".hind-image{display:flex;align-items:center;justify-content:center;min-height:320px;overflow:hidden;border-radius:24px}",
+      ".hind-image img{display:block;width:100%;height:auto;max-height:620px;object-fit:contain}",
+      ".hind-image img.asset-fallback{width:min(78%,420px);padding:28px;background:rgba(255,253,249,.7);border-radius:24px}",
+      ".value-grid,.values-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}",
+      ".how-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}",
+      ".footer-logo{font-size:1.3rem;font-weight:700}",
+      ".btn-light{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:12px 18px;border-radius:999px;background:var(--cream);color:var(--cocoa);font-weight:700}",
+      ".text-link{display:inline-flex;align-items:center;min-height:44px}",
+      ".lightbox{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}",
+      ".lightbox-close{min-width:48px;min-height:48px}",
+      ".sticky-cta{padding-bottom:max(10px,env(safe-area-inset-bottom))}",
+      "@media(max-width:760px){.order-layout{display:block}.order-intro{position:static;margin-bottom:22px}.category-options,.fulfillment-options,.value-grid,.values-grid,.how-grid{grid-template-columns:1fr}.hind-image{min-height:240px}.hind-image img.asset-fallback{width:min(74%,300px)}.order-card{padding-bottom:calc(24px + env(safe-area-inset-bottom))}}",
+      "@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}"
+    ].join("");document.head.appendChild(s);
   }
-  function syncLanguage() {
-    window.setTimeout(function () {
-      render();
-      updateSummaryIfAvailable();
-    }, 0);
+  function hardenA11y(){
+    var map={menuToggle:["Ouvrir le menu","فتح القائمة"],lightboxClose:["Fermer","إغلاق"],backTop:["Retour en haut","العودة إلى الأعلى"]};
+    Object.keys(map).forEach(function(id){var el=$(id);if(el)el.setAttribute("aria-label",map[id][getLang()==="ar"?1:0]);});
+    ["quantite","dateSouhaitee","quartier","nom","telephone"].forEach(function(id){var el=$(id);if(el)el.setAttribute("autocomplete",el.getAttribute("autocomplete")||"off");});
   }
-  function syncDelivery() {
-    var f = form();
-    if (!f) return;
-    var mode = checked("mode");
-    var isDelivery = mode && mode.value === "Livraison";
-    var zone = $("quartier");
-    var extra = $("deliveryExtra");
-
-    if (extra) {
-      extra.classList.toggle("show", !!isDelivery);
-      extra.classList.toggle("is-active", !!isDelivery);
-      extra.setAttribute("aria-hidden", isDelivery ? "false" : "true");
-    }
-    if (zone) {
-      zone.disabled = false;
-      zone.required = !!isDelivery;
-      if (!isDelivery) zone.value = "";
-    }
-    updateStateFromDom();
-    updateSummaryIfAvailable();
+  function boot(){
+    var f=getForm(); if(!f)return;
+    injectMobileAndCompatibilityCSS(); fixPortrait(); hardenA11y();
+    f.addEventListener("change",function(e){
+      if(!e||!e.target)return;
+      if(e.target.name==="categorie")syncCategory();
+      else if(e.target.name==="mode")syncDelivery();
+      else if(e.target.name==="quartier")syncState();
+    },true);
+    var fr=$("langFr"),ar=$("langAr");if(fr)fr.addEventListener("click",function(){setTimeout(function(){renderQuantity();hardenA11y();},0);});if(ar)ar.addEventListener("click",function(){setTimeout(function(){renderQuantity();hardenA11y();},0);});
+    var q=$("quantite");if(q)q.addEventListener("input",function(){syncState();});
+    document.querySelectorAll(".order-trigger").forEach(function(btn){btn.addEventListener("click",function(){var cat=btn.getAttribute("data-category");var radios=f.querySelectorAll('input[name="categorie"]');Array.prototype.forEach.call(radios,function(r){r.checked=r.value===cat;});syncCategory();setTimeout(function(){var o=$("order");if(o)o.scrollIntoView({behavior:"smooth",block:"start"});var q=$("quantite");if(q)try{q.focus({preventScroll:true});}catch(e){q.focus();}},240);});});
+    window.addEventListener("pageshow",function(){renderQuantity();syncDelivery();fixPortrait();hardenA11y();});
+    renderQuantity(); syncDelivery(); syncState();
   }
-  function addIOSHardening() {
-    var root = document.documentElement;
-    root.style.webkitTextSizeAdjust = "100%";
-    root.style.textSizeAdjust = "100%";
-    var id = "hind-production-mobile-style";
-    if (!$(id)) {
-      var style = document.createElement("style");
-      style.id = id;
-      style.textContent = [
-        "html{-webkit-text-size-adjust:100%;text-size-adjust:100%;overflow-x:hidden}",
-        "body{overflow-x:hidden;-webkit-overflow-scrolling:touch}",
-        "button,a,input,select,textarea{touch-action:manipulation}",
-        ".quantity-chip,.cat-option,.radio-pill,.btn{min-height:48px}",
-        "input,select,textarea{font-size:16px}",
-        "#quantite{min-height:48px}",
-        ".delivery-extra{scroll-margin-top:calc(88px + env(safe-area-inset-top))}",
-        ".sticky-cta{padding-bottom:max(10px,env(safe-area-inset-bottom))}",
-        ".lightbox{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}",
-        "@media(max-width:760px){.container{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right))}.order-card{padding-bottom:calc(24px + env(safe-area-inset-bottom))}}"
-      ].join("");
-      document.head.appendChild(style);
-    }
-
-    var vv = window.visualViewport;
-    function syncVH() {
-      var h = vv && vv.height ? vv.height : window.innerHeight;
-      root.style.setProperty("--app-vh", h + "px");
-    }
-    syncVH();
-    window.addEventListener("resize", syncVH, { passive: true });
-    if (vv) vv.addEventListener("resize", syncVH, { passive: true });
-
-    document.addEventListener("focusin", function (event) {
-      var el = event.target;
-      if (!el || !/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
-      window.setTimeout(function () {
-        if (document.activeElement !== el) return;
-        try { el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" }); } catch (e) { el.scrollIntoView(); }
-      }, 220);
-    });
-
-    var portrait = document.querySelector(".hind-image img");
-    if (portrait) {
-      portrait.addEventListener("error", function () {
-        if (portrait.dataset.fallbackApplied === "1") return;
-        portrait.dataset.fallbackApplied = "1";
-        var picture = portrait.parentElement;
-        if (picture && picture.tagName === "PICTURE") {
-          Array.prototype.forEach.call(picture.querySelectorAll("source"), function (source) { source.removeAttribute("srcset"); });
-        }
-        portrait.src = "images/hind-delices-logo.webp";
-        portrait.alt = "Hin Délices";
-        portrait.classList.add("asset-fallback");
-      }, { once: true });
-    }
-
-    Array.prototype.forEach.call(document.querySelectorAll("video"), function (video) {
-      video.setAttribute("playsinline", "");
-      video.setAttribute("webkit-playsinline", "");
-      video.muted = true;
-    });
-  }
-  function boot() {
-    var f = form();
-    if (!f) return;
-
-    addIOSHardening();
-
-    f.addEventListener("change", function (event) {
-      var target = event.target;
-      if (target && target.name === "categorie") syncCategory();
-      else if (target && target.name === "mode") syncDelivery();
-      else if (target && target.name === "quartier") updateSummaryIfAvailable();
-    }, true);
-
-    var fr = $("langFr"), ar = $("langAr");
-    if (fr) fr.addEventListener("click", syncLanguage);
-    if (ar) ar.addEventListener("click", syncLanguage);
-
-    var input = $("quantite");
-    if (input) {
-      input.addEventListener("input", function () {
-        updateStateFromDom();
-        var cat = state.category;
-        var list = CONFIG[cat] ? CONFIG[cat].quantities : [];
-        var value = input.value.trim();
-        var preset = currentPreset(list, value);
-        var wrap = $("quantityChips");
-        if (wrap) Array.prototype.forEach.call(wrap.querySelectorAll(".quantity-chip"), function (chip) {
-          var isCustom = chip.getAttribute("data-quantity") === "";
-          chip.classList.toggle("is-selected", !preset && isCustom && !!value || (!!preset && chip.getAttribute("data-quantity") === value));
-          chip.setAttribute("aria-pressed", chip.classList.contains("is-selected") ? "true" : "false");
-        });
-      });
-    }
-
-    render();
-    syncDelivery();
-    updateStateFromDom();
-  }
-
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 })();

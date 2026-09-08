@@ -56,6 +56,91 @@
         a.removeAttribute("target");
         a.removeAttribute("rel");
       });
+
+      /* Category-aware quantity presets. The original form had one global
+         36-piece chip, so switching categories left the old value visible.
+         Rebuild the chips whenever the category changes and clear stale data. */
+      (function installQuantitySelectorFix() {
+        var form = document.getElementById("orderForm");
+        var chipsWrap = document.getElementById("quantityChips");
+        var qtyInput = document.getElementById("quantite");
+        if (!form || !chipsWrap || !qtyInput) return;
+
+        var presets = {
+          "Biscuits du quotidien": [
+            { value: "36 pièces", label: "36 pièces", price: "130 MAD" },
+            { value: "72 pièces", label: "72 pièces", price: "Sur devis" },
+            { value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }
+          ],
+          "Gâteaux sur mesure": [
+            { value: "6–8 pers.", label: "6–8 pers.", price: "350 MAD" },
+            { value: "10–12 pers.", label: "10–12 pers.", price: "Sur devis" },
+            { value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }
+          ],
+          "Plateaux cadeaux": [
+            { value: "1 plateau", label: "1 plateau", price: "240 MAD" },
+            { value: "2 plateaux", label: "2 plateaux", price: "Sur devis" },
+            { value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }
+          ],
+          "Coffrets saisonniers": [
+            { value: "1 coffret", label: "1 coffret", price: "180 MAD" },
+            { value: "2 coffrets", label: "2 coffrets", price: "Sur devis" },
+            { value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }
+          ],
+          "À discuter": [
+            { value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }
+          ]
+        };
+
+        function getCategory() {
+          var checked = form.querySelector('input[name="categorie"]:checked');
+          return checked ? checked.value : "";
+        }
+
+        function render(category) {
+          var options = presets[category] || [{ value: "Sur mesure", label: "Sur mesure", price: "Sur devis" }];
+          var previous = qtyInput.value;
+          chipsWrap.innerHTML = "";
+          options.forEach(function (item) {
+            var chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "quantity-chip";
+            chip.setAttribute("data-quantity", item.value);
+            chip.setAttribute("data-price", item.price);
+            chip.textContent = item.label;
+            chip.addEventListener("click", function () {
+              qtyInput.value = item.value;
+              Array.prototype.forEach.call(chipsWrap.querySelectorAll(".quantity-chip"), function (c) {
+                c.classList.toggle("is-selected", c === chip);
+                c.setAttribute("aria-pressed", c === chip ? "true" : "false");
+              });
+              qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
+              qtyInput.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+            chipsWrap.appendChild(chip);
+          });
+
+          var stillValid = options.some(function (item) { return item.value === previous; });
+          if (stillValid) {
+            qtyInput.value = previous;
+            Array.prototype.forEach.call(chipsWrap.querySelectorAll(".quantity-chip"), function (chip) {
+              var selected = chip.getAttribute("data-quantity") === previous;
+              chip.classList.toggle("is-selected", selected);
+              chip.setAttribute("aria-pressed", selected ? "true" : "false");
+            });
+          } else {
+            qtyInput.value = "";
+          }
+          qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
+          qtyInput.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+
+        form.querySelectorAll('input[name="categorie"]').forEach(function (radio) {
+          radio.addEventListener("change", function () { render(radio.value); });
+        });
+
+        render(getCategory());
+      })();
     });
 
     var timer;

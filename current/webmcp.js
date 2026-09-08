@@ -1,209 +1,233 @@
-/* Hin Délices — WebMCP agent tools
- * Optional enhancement: the site remains fully functional when WebMCP is unavailable.
- * No secrets or customer data are exposed through tool schemas.
+/* Hin Délices — WebMCP ordering tools
+ * Progressive enhancement: the normal website works unchanged without WebMCP.
  */
 (function () {
   "use strict";
 
-  if (!document.modelContext || typeof document.modelContext.registerTool !== "function") {
-    return;
-  }
+  var modelContext = document.modelContext;
+  if (!modelContext || typeof modelContext.registerTool !== "function") return;
 
-  var WHATSAPP_NUMBER = "212660530382";
-  var PRICE_BY_CATEGORY = {
-    "Biscuits du quotidien": "130 MAD",
-    "Gâteaux sur mesure": "350 MAD",
-    "Plateaux cadeaux": "240 MAD",
-    "Coffrets saisonniers": "180 MAD",
-    "À discuter": "Sur devis"
+  var PHONE = "212660530382";
+  var CATEGORIES = {
+    "Biscuits du quotidien": { price: 130, quantities: ["36 pièces", "72 pièces", "Sur mesure"] },
+    "Plateaux cadeaux": { price: 240, quantities: ["1 plateau", "2 plateaux", "Sur mesure"] },
+    "Coffrets saisonniers": { price: 180, quantities: ["1 coffret", "2 coffrets", "Sur mesure"] },
+    "Gâteaux sur mesure": { price: 350, quantities: ["6–8 pers.", "10–12 pers.", "Sur mesure"] },
+    "À discuter": { price: null, quantities: ["Sur mesure"] }
   };
 
-  var QUANTITIES = {
-    "Biscuits du quotidien": ["36 pièces", "72 pièces", "Sur mesure"],
-    "Gâteaux sur mesure": ["6–8 pers.", "10–12 pers.", "Sur mesure"],
-    "Plateaux cadeaux": ["1 plateau", "2 plateaux", "Sur mesure"],
-    "Coffrets saisonniers": ["1 coffret", "2 coffrets", "Sur mesure"],
-    "À discuter": ["Sur mesure"]
-  };
+  function clean(v) { return String(v == null ? "" : v).trim(); }
 
-  function clean(value) {
-    return String(value == null ? "" : value).trim();
-  }
+  function form() { return document.getElementById("orderForm"); }
 
-  function getCategory() {
-    var el = document.querySelector('input[name="categorie"]:checked');
-    return el ? el.value : "";
-  }
-
-  function getForm() {
-    return document.getElementById("orderForm");
-  }
-
-  function getZones() {
-    var select = document.getElementById("quartier");
-    if (!select) return [];
-    return Array.prototype.map.call(select.options, function (option) {
-      return {
-        value: option.value,
-        label: option.textContent.trim(),
-        group: option.parentElement && option.parentElement.tagName === "OPTGROUP"
-          ? option.parentElement.label
-          : ""
-      };
-    }).filter(function (zone) {
-      return zone.value;
-    });
-  }
-
-  function getMinimumDate(category) {
-    var base = new Date();
-    var hours = category === "Gâteaux sur mesure" ? 48 : 24;
-    base.setTime(base.getTime() + hours * 60 * 60 * 1000);
-    var y = base.getFullYear();
-    var m = String(base.getMonth() + 1).padStart(2, "0");
-    var d = String(base.getDate()).padStart(2, "0");
-    return y + "-" + m + "-" + d;
-  }
-
-  function browseCreations() {
-    return Object.keys(PRICE_BY_CATEGORY).map(function (category) {
-      return {
-        category: category,
-        startingPrice: PRICE_BY_CATEGORY[category],
-        quantityOptions: QUANTITIES[category] || []
-      };
-    });
-  }
-
-  function getOrderValues() {
-    var form = getForm();
-    if (!form) return {};
-    var data = new FormData(form);
+  function values() {
+    var f = form();
+    if (!f) return {};
+    var fd = new FormData(f);
     return {
-      category: clean(data.get("categorie")),
-      quantity: clean(data.get("quantite")),
-      date: clean(data.get("date")),
-      occasion: clean(data.get("occasion")),
-      details: clean(data.get("details")),
-      fulfillment: clean(data.get("mode")) || "Retrait",
-      neighborhood: clean(data.get("quartier")),
-      name: clean(data.get("nom")),
-      phone: clean(data.get("telephone"))
+      category: clean(fd.get("categorie")),
+      quantity: clean(fd.get("quantite")),
+      date: clean(fd.get("date")),
+      occasion: clean(fd.get("occasion")),
+      details: clean(fd.get("details")),
+      fulfillment: clean(fd.get("mode")) || "Retrait",
+      neighborhood: clean(fd.get("quartier")),
+      name: clean(fd.get("nom")),
+      phone: clean(fd.get("telephone"))
     };
   }
 
-  function isValidPhone(phone) {
-    var normalized = clean(phone).replace(/[\s().-]/g, "").replace(/^00/, "+");
-    return /^(?:\+212|0)[5-7]\d{8}$/.test(normalized);
+  function zones() {
+    var select = document.getElementById("quartier");
+    if (!select) return [];
+    return Array.prototype.map.call(select.options, function (o) {
+      return {
+        value: o.value,
+        label: o.textContent.trim(),
+        group: o.parentElement && o.parentElement.tagName === "OPTGROUP"
+          ? o.parentElement.label : ""
+      };
+    }).filter(function (z) { return z.value; });
+  }
+
+  function minimumDate(category) {
+    if (window.HinDelices && typeof window.HinDelices.getMinimumOrderDate === "function") {
+      return window.HinDelices.getMinimumOrderDate(category);
+    }
+    var d = new Date();
+    d.setHours(d.getHours() + (category === "Gâteaux sur mesure" ? 48 : 24));
+    return d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+  }
+
+  function validPhone(phone) {
+    if (window.HinDelices && typeof window.HinDelices.isValidMoroccanPhone === "function") {
+      return window.HinDelices.isValidMoroccanPhone(phone);
+    }
+    var n = clean(phone).replace(/[\s().-]/g, "").replace(/^00/, "+");
+    return /^(?:\+212|0)[5-7]\d{8}$/.test(n);
+  }
+
+  function dispatch(el, type) {
+    if (el) el.dispatchEvent(new Event(type, { bubbles: true }));
+  }
+
+  function selectRadio(name, value) {
+    var f = form();
+    if (!f) return false;
+    var found = false;
+    Array.prototype.forEach.call(f.querySelectorAll('input[name="' + name + '"]'), function (r) {
+      var match = r.value === value;
+      r.checked = match;
+      if (match) { found = true; dispatch(r, "change"); }
+    });
+    return found;
+  }
+
+  function browseCreations() {
+    return Object.keys(CATEGORIES).map(function (name) {
+      var c = CATEGORIES[name];
+      return {
+        category: name,
+        startingPriceMAD: c.price,
+        priceLabel: c.price == null ? "Sur devis" : "Dès " + c.price + " MAD",
+        quantityOptions: c.quantities
+      };
+    });
+  }
+
+  function getDeliveryZones() {
+    return {
+      city: "Marrakech",
+      pickup: "Quick Targa",
+      zones: zones()
+    };
   }
 
   function validateOrder(input) {
-    input = input || {};
-    var category = clean(input.category);
-    var quantity = clean(input.quantity);
-    var date = clean(input.date);
-    var fulfillment = clean(input.fulfillment) || "Retrait";
-    var neighborhood = clean(input.neighborhood);
-    var name = clean(input.name);
-    var phone = clean(input.phone);
-
+    var v = Object.assign({}, values(), input || {});
     var errors = [];
-    if (!PRICE_BY_CATEGORY[category]) errors.push("category");
+    var category = clean(v.category);
+    var quantity = clean(v.quantity);
+    var date = clean(v.date);
+    var fulfillment = clean(v.fulfillment) || "Retrait";
+    var neighborhood = clean(v.neighborhood);
+    var name = clean(v.name);
+    var phone = clean(v.phone);
+
+    if (!CATEGORIES[category]) errors.push("category");
     if (!quantity) errors.push("quantity");
-    if (!date || date < getMinimumDate(category)) errors.push("date");
+    if (!date || date < minimumDate(category)) errors.push("date");
+    if (fulfillment !== "Retrait" && fulfillment !== "Livraison") errors.push("fulfillment");
     if (fulfillment === "Livraison" && !neighborhood) errors.push("neighborhood");
     if (!name) errors.push("name");
-    if (!isValidPhone(phone)) errors.push("phone");
+    if (!validPhone(phone)) errors.push("phone");
 
     return {
       valid: errors.length === 0,
       errors: errors,
-      minimumDate: getMinimumDate(category),
-      message: errors.length ? "Order needs correction before it can be prepared." : "Order is valid and ready for user review."
+      minimumDate: minimumDate(category),
+      fulfillment: fulfillment,
+      message: errors.length
+        ? "Order needs correction before WhatsApp handoff."
+        : "Order is valid and ready for user review."
     };
   }
 
   function prepareOrder(input) {
-    var form = getForm();
-    if (!form) return { ok: false, error: "Order form unavailable." };
+    input = input || {};
+    var f = form();
+    if (!f) return { ok: false, error: "Order form unavailable." };
 
-    var category = clean(input && input.category);
-    var quantity = clean(input && input.quantity);
-    var date = clean(input && input.date);
-    var fulfillment = clean(input && input.fulfillment) || "Retrait";
-    var neighborhood = clean(input && input.neighborhood);
-
-    if (category && !PRICE_BY_CATEGORY[category]) {
-      return { ok: false, error: "Unknown category." };
+    if (input.category && !CATEGORIES[input.category]) {
+      return { ok: false, error: "Unknown category.", allowedCategories: Object.keys(CATEGORIES) };
     }
 
-    var radios = form.querySelectorAll('input[name="categorie"]');
-    Array.prototype.forEach.call(radios, function (radio) {
-      radio.checked = radio.value === category;
-    });
+    if (input.category) selectRadio("categorie", input.category);
 
     var qty = document.getElementById("quantite");
-    if (qty && quantity) qty.value = quantity;
-
-    var dateInput = document.getElementById("dateSouhaitee");
-    if (dateInput && date) dateInput.value = date;
-
-    var mode = form.querySelectorAll('input[name="mode"]');
-    Array.prototype.forEach.call(mode, function (radio) {
-      radio.checked = radio.value === fulfillment;
-    });
-
-    var zone = document.getElementById("quartier");
-    if (zone) {
-      zone.value = neighborhood || "";
-      zone.required = fulfillment === "Livraison";
+    if (input.quantity !== undefined && qty) {
+      qty.value = clean(input.quantity);
+      dispatch(qty, "input");
+      dispatch(qty, "change");
     }
 
-    if (typeof window.HinDelices === "object" && typeof window.HinDelices.readValues === "function") {
-      // Refresh the site's existing summary without replacing its form logic.
+    var date = document.getElementById("dateSouhaitee");
+    if (input.date !== undefined && date) {
+      date.value = clean(input.date);
+      dispatch(date, "input");
+      dispatch(date, "change");
+    }
+
+    if (input.fulfillment !== undefined) {
+      if (!selectRadio("mode", input.fulfillment)) {
+        return { ok: false, error: "Unknown fulfillment mode." };
+      }
+    }
+
+    var zone = document.getElementById("quartier");
+    if (input.neighborhood !== undefined && zone) {
+      zone.value = clean(input.neighborhood);
+      dispatch(zone, "change");
+    }
+
+    if (window.HinDelices && typeof window.HinDelices.readValues === "function") {
       window.HinDelices.readValues();
     }
 
+    var current = values();
     return {
       ok: true,
-      category: category || getCategory(),
-      startingPrice: PRICE_BY_CATEGORY[category] || "",
-      quantity: quantity,
-      date: date,
-      fulfillment: fulfillment,
-      neighborhood: neighborhood
+      order: {
+        category: current.category,
+        quantity: current.quantity,
+        date: current.date,
+        fulfillment: current.fulfillment,
+        neighborhood: current.neighborhood
+      },
+      startingPriceMAD: CATEGORIES[current.category] ? CATEGORIES[current.category].price : null
     };
   }
 
-  function prepareWhatsAppOrder(input) {
-    var values = Object.assign({}, getOrderValues(), input || {});
-    var validation = validateOrder(values);
-    if (!validation.valid) {
-      return {
-        ready: false,
-        requiresCorrection: true,
-        validation: validation
-      };
-    }
+  function prepareWhatsApp(input) {
+    var v = Object.assign({}, values(), input || {});
+    var check = validateOrder(v);
+    if (!check.valid) return { ready: false, requiresCorrection: true, validation: check };
 
-    var message = [
-      "*Nouvelle demande — Hin Délices*",
-      "• Produit : " + values.category,
-      "• Date : " + values.date,
-      "• Quantité : " + values.quantity,
-      "• Occasion : " + (values.occasion || "Non précisée"),
-      "• Détails : " + (values.details || "Aucun"),
-      "• Mode : " + values.fulfillment + (values.neighborhood ? " (Zone : " + values.neighborhood + ")" : ""),
-      "• Client : " + values.name + " — " + values.phone
-    ].join("\n");
+    var message;
+    if (document.documentElement.lang === "ar") {
+      message = [
+        "السلام عليكم هند، بغيت ندوز كوماند لـ Hin Délices.",
+        "الفئة: " + v.category,
+        "التاريخ: " + v.date,
+        "الكمية: " + v.quantity,
+        "المناسبة: " + (v.occasion || "غير محددة"),
+        "التفاصيل: " + (v.details || "لا توجد"),
+        "طريقة الاستلام: " + v.fulfillment,
+        "الحي / المنطقة: " + (v.neighborhood || "غير محدد"),
+        "الاسم: " + v.name,
+        "الهاتف: " + v.phone
+      ].join("\n");
+    } else {
+      message = [
+        "*Nouvelle demande — Hin Délices*",
+        "• Produit : " + v.category,
+        "• Date : " + v.date,
+        "• Quantité : " + v.quantity,
+        "• Occasion : " + (v.occasion || "Non précisée"),
+        "• Détails : " + (v.details || "Aucun"),
+        "• Mode : " + v.fulfillment + (v.neighborhood ? " (Zone : " + v.neighborhood + ")" : ""),
+        "• Client : " + v.name + " — " + v.phone
+      ].join("\n");
+    }
 
     return {
       ready: true,
       requiresUserConfirmation: true,
-      phone: WHATSAPP_NUMBER,
-      encodedText: encodeURIComponent(message),
       reviewMessage: message,
-      url: "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(message)
+      encodedText: encodeURIComponent(message),
+      url: "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(message)
     };
   }
 
@@ -211,9 +235,9 @@
     {
       name: "browse_creations",
       title: "Browse Hin Délices creations",
-      description: "Read Hin Délices categories, starting prices in MAD, and suitable quantity options. Does not change the page.",
+      description: "Read current Hin Délices categories, starting prices in MAD, and suitable quantity options. Read-only.",
       inputSchema: { type: "object", properties: {} },
-      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      annotations: { readOnlyHint: true },
       execute: async function () {
         return { currency: "MAD", creations: browseCreations() };
       }
@@ -221,17 +245,50 @@
     {
       name: "get_delivery_zones",
       title: "Check Marrakech delivery zones",
-      description: "Read the delivery zones currently offered by the Hin Délices order form. Does not place or submit an order.",
+      description: "Read the delivery zones exposed by the current Hin Délices order form and the Quick Targa pickup location. Read-only.",
       inputSchema: { type: "object", properties: {} },
-      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      annotations: { readOnlyHint: true },
       execute: async function () {
-        return { city: "Marrakech", zones: getZones(), pickup: "Quick Targa" };
+        return getDeliveryZones();
+      }
+    },
+    {
+      name: "get_current_order",
+      title: "Read current order draft",
+      description: "Read the current visible order draft from the Hin Délices form. Does not submit or send anything.",
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true },
+      execute: async function () {
+        return { order: values() };
+      }
+    },
+    {
+      name: "prepare_order",
+      title: "Prepare an order",
+      description: "Populate the existing Hin Délices order form with a category, quantity, date, fulfillment mode, and delivery zone. Never submits the order.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          category: { type: "string", enum: Object.keys(CATEGORIES) },
+          quantity: { type: "string" },
+          date: { type: "string", format: "date" },
+          fulfillment: { type: "string", enum: ["Retrait", "Livraison"] },
+          neighborhood: { type: "string" }
+        },
+        required: ["category"]
+      },
+      annotations: { readOnlyHint: false },
+      execute: async function (input) {
+        var result = prepareOrder(input);
+        var order = document.getElementById("order");
+        if (order) order.scrollIntoView({ behavior: "smooth", block: "start" });
+        return result;
       }
     },
     {
       name: "validate_order",
-      title: "Validate a Hin Délices order",
-      description: "Check category, quantity, lead time, delivery zone, customer name, and Moroccan phone format without opening WhatsApp or submitting anything.",
+      title: "Validate an order",
+      description: "Validate the current or supplied order, including lead time, delivery zone, and Moroccan phone format. Does not send anything.",
       inputSchema: {
         type: "object",
         properties: {
@@ -242,38 +299,17 @@
           neighborhood: { type: "string" },
           name: { type: "string" },
           phone: { type: "string" }
-        },
-        required: ["category", "quantity", "date", "fulfillment", "name", "phone"]
+        }
       },
-      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      annotations: { readOnlyHint: true },
       execute: async function (input) {
-        return validateOrder(input);
-      }
-    },
-    {
-      name: "prepare_order",
-      title: "Prepare an order in the Hin Délices form",
-      description: "Prefill the visible Hin Délices order form with user-provided choices. It does not send the order.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          category: { type: "string" },
-          quantity: { type: "string" },
-          date: { type: "string", format: "date" },
-          fulfillment: { type: "string", enum: ["Retrait", "Livraison"] },
-          neighborhood: { type: "string" }
-        },
-        required: ["category"]
-      },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: async function (input) {
-        return prepareOrder(input || {});
+        return validateOrder(input || {});
       }
     },
     {
       name: "prepare_whatsapp_order",
-      title: "Prepare a WhatsApp order for review",
-      description: "Build the exact WhatsApp order message from the current or supplied order. It never opens WhatsApp and requires user review before sending.",
+      title: "Prepare WhatsApp order",
+      description: "Create the final WhatsApp message and encoded URL after validating the current or supplied order. It never opens WhatsApp.",
       inputSchema: {
         type: "object",
         properties: {
@@ -290,53 +326,60 @@
       },
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: async function (input) {
-        return prepareWhatsAppOrder(input || {});
+        return prepareWhatsApp(input || {});
       }
     },
     {
       name: "open_order_form",
-      title: "Open the Hin Délices order form",
-      description: "Scroll to the order form so the user can review or edit the request. Does not submit an order.",
+      title: "Open the order form",
+      description: "Navigate the user to the visible Hin Délices order section without submitting an order.",
       inputSchema: {
         type: "object",
-        properties: { category: { type: "string" } }
+        properties: { category: { type: "string", enum: Object.keys(CATEGORIES) } }
       },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      annotations: { readOnlyHint: false },
       execute: async function (input) {
-        var result = input && input.category ? prepareOrder({ category: input.category }) : { ok: true };
+        if (input && input.category) prepareOrder({ category: input.category });
         var order = document.getElementById("order");
         if (order) order.scrollIntoView({ behavior: "smooth", block: "start" });
-        return Object.assign(result, { opened: true });
+        return { opened: true, section: "order" };
       }
     },
     {
       name: "open_whatsapp_order",
-      title: "Open WhatsApp with the reviewed Hin Délices order",
-      description: "Open WhatsApp with the prepared order message. This is a consequential user-facing handoff and must only be used after the user has reviewed and confirmed the order.",
+      title: "Open reviewed order in WhatsApp",
+      description: "Open WhatsApp only after the user has explicitly reviewed and confirmed the prepared order.",
       inputSchema: {
         type: "object",
         properties: {
-          confirmed: { type: "boolean", description: "True only after the user explicitly confirms the prepared order." }
+          confirmed: {
+            type: "boolean",
+            description: "Must be true only after the user explicitly confirms the reviewed order."
+          }
         },
         required: ["confirmed"]
       },
       annotations: { readOnlyHint: false, consequentialHint: true, untrustedContentHint: true },
       execute: async function (input) {
         if (!input || input.confirmed !== true) {
-          return { opened: false, requiresConfirmation: true, message: "User confirmation is required before opening WhatsApp." };
+          return {
+            opened: false,
+            requiresConfirmation: true,
+            message: "User confirmation is required before opening WhatsApp."
+          };
         }
 
-        var prepared = prepareWhatsAppOrder({});
+        var prepared = prepareWhatsApp({});
         if (!prepared.ready) return { opened: false, ...prepared };
 
         window.location.href = prepared.url;
-        return { opened: true, destination: "WhatsApp", message: "WhatsApp handoff initiated after confirmation." };
+        return { opened: true, destination: "WhatsApp" };
       }
     }
   ];
 
   Promise.all(tools.map(function (tool) {
-    return document.modelContext.registerTool(tool);
+    return modelContext.registerTool(tool);
   })).then(function () {
     document.documentElement.setAttribute("data-webmcp", "ready");
   }).catch(function (error) {
